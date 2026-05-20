@@ -1,0 +1,47 @@
+---
+title: "Divorces in Denmark"
+author: "Mark Pagh, Marie Lund and Ina Thomsen"
+date: "2026-05-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+#Library - MP
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(here)
+
+```
+
+
+
+```{r data}
+#Load data + cleaning na - MJ
+Skilsmisse <- read_csv2(here("data/Skilsmisser.CSV"), na = "NULL")
+
+#Data inspections - MJ
+head(Skilsmisse)
+glimpse(Skilsmisse)
+
+
+```
+
+
+```{r graph}
+##ggplot - IT
+Skilsmisse %>%
+  tail(157) %>%
+  ggplot( aes(x=Year, y=Divorces)) +
+  geom_line(color="darkgreen") +
+  geom_point(color="darkgreen") +
+  xlim(1869, 2025) +
+  ylim(0, 20000) +
+  scale_x_continuous(n.breaks = 15)+
+  scale_y_continuous(n.breaks = 10)+
+  ggtitle("Divorces in Denmark 1869-2025")
+
+```
+
