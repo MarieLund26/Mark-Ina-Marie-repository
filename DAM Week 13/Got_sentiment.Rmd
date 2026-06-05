@@ -1,0 +1,281 @@
+---
+title: 'Got_sentiment'
+date: 'created on 22 November 2020 and updated `r format(Sys.time(), "%d %B, %Y")`'
+author: "Ina Thomsen, Marie Jensen & Mark Pagh"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+library(tidyverse)
+library(here)
+
+# For text mining:
+
+library(pdftools)
+library(tidytext)
+library(textdata) 
+library(ggwordcloud)
+```
+
+
+### Get the got pdf:
+```{r get-document}
+got_path <- here("data","got.pdf")
+got_text <- pdf_text(got_path)
+```
+
+
+Example: Just want to get text from a single page (e.g. Page 9)? 
+```{r single-page}
+got_p9 <- got_text[9]
+got_p9
+```
+
+### Some wrangling:
+
+- Split up pages into separate lines (separated by `\n`) using `stringr::str_split()`
+- Unnest into regular columns using `tidyr::unnest()`
+- Remove leading/trailing white space with `stringr::str_trim()`
+
+```{r split-lines}
+got_df <- data.frame(got_text) %>% 
+  mutate(text_full = str_split(got_text, pattern = '\n')) %>% 
+  unnest(text_full) %>% 
+  mutate(text_full = str_trim(text_full)) 
+
+# More information: https://cran.r-project.org/web/packages/stringr/vignettes/regular-expressions.html
+```
+
+
+
+```{r tokenize}
+got_tokens <- got_df %>% 
+  unnest_tokens(word, text_full)
+
+```
+
+
+```{r count-words}
+got_wc <- got_tokens %>% 
+  count(word) %>% 
+  arrange(-n)
+got_wc
+```
+
+
+
+### Remove stop words:
+
+
+```{r stopwords}
+got_stop <- got_tokens %>% 
+  anti_join(stop_words) %>% 
+  select(-got_text)
+```
+
+Now check the counts again: 
+```{r count-words2}
+got_swc <- got_stop %>% 
+  count(word) %>% 
+  arrange(-n)
+```
+
+
+```{r skip-numbers}
+
+got_no_numeric <- got_stop %>% 
+  filter(is.na(as.numeric(word)))
+```
+
+### A word cloud of got pdf words (non-numeric)
+
+
+```{r wordcloud-prep}
+# There are almost 2000 unique words 
+length(unique(got_no_numeric$word))
+
+# We probably don't want to include them all in a word cloud. Let's filter to only include the top 100 most frequent?
+got_top100 <- got_no_numeric %>% 
+  count(word) %>% 
+  arrange(-n) %>% 
+  head(100)
+got_top100
+```
+
+```{r wordcloud}
+got_cloud <- ggplot(data = got_top100, aes(label = word)) +
+  geom_text_wordcloud() +
+  theme_minimal()
+
+got_cloud
+```
+
+```{r wordcloud-pro}
+ggplot(data = got_top100, aes(label = word, size = n)) +
+  geom_text_wordcloud_area(aes(color = n), shape = "star") +
+  scale_size_area(max_size = 12) +
+  scale_color_gradientn(colors = c("darkgreen","blue","red")) +
+  theme_minimal()
+```
+
+### Sentiment analysis
+
+
+
+"afinn": Words ranked from -5 (very negative) to +5 (very positive)
+```{r afinn}
+get_sentiments(lexicon = "afinn")
+# You should be prompted to install lexicon - choose yes!
+
+
+# Let's look at the pretty positive words:
+afinn_pos <- get_sentiments("afinn") %>% 
+  filter(value %in% c(3,4,5))
+
+# Do not look at negative words in class. 
+afinn_pos
+```
+
+bing: binary, "positive" or "negative"
+```{r bing}
+get_sentiments(lexicon = "bing")
+# You should be prompted to install lexicon - choose yes!
+
+```
+
+
+Now nrc:
+```{r nrc}
+get_sentiments(lexicon = "nrc")
+# You should be prompted to install lexicon - choose yes!
+
+```
+
+
+
+### Sentiment analysis with afinn: 
+
+
+```{r bind-afinn}
+got_afinn <- got_stop %>% 
+  inner_join(get_sentiments("afinn"))
+got_afinn
+```
+
+Let's find some counts (by sentiment ranking):
+```{r count-afinn}
+got_afinn_hist <- got_afinn %>% 
+  count(value)
+
+# Plot them: 
+ggplot(data = got_afinn_hist, aes(x = value, y = n)) +
+  geom_col(aes(fill = value)) +
+  theme_bw()
+```
+
+Investigate some of the words in a bit more depth:
+```{r afinn-2}
+# What are these '2' words?
+got_afinn2 <- got_afinn %>% 
+  filter(value == 2)
+```
+
+```{r afinn-2-more}
+# Check the unique 2-score words:
+unique(got_afinn2$word)
+
+# Count & plot them
+got_afinn2_n <- got_afinn2 %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(word = fct_reorder(factor(word), n))
+
+
+ggplot(data = got_afinn2_n, aes(x = word, y = n)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw()
+
+
+```
+
+```{r summarize-afinn}
+got_summary <- got_afinn %>% 
+  summarize(
+    mean_score = mean(value),
+    median_score = median(value)
+  )
+got_summary 
+```
+
+
+### NRC lexicon for sentiment analysis
+
+```{r bind-bing}
+got_nrc <- got_stop %>% 
+  inner_join(get_sentiments("nrc"))
+```
+
+
+```{r check-exclusions}
+got_exclude <- got_stop %>% 
+  anti_join(get_sentiments("nrc"))
+
+
+# Count to find the most excluded:
+got_exclude_n <- got_exclude %>% 
+  count(word, sort = TRUE)
+
+head(got_exclude_n)
+```
+
+
+Now find some counts: 
+```{r count-bing}
+got_nrc_n <- got_nrc %>% 
+  count(sentiment, sort = TRUE)
+
+# And plot them:
+
+ggplot(data = got_nrc_n, aes(x = sentiment, y = n)) +
+  geom_col(aes(fill = sentiment))+
+  theme_bw()
+```
+
+```{r count-nrc}
+got_nrc_n5 <- got_nrc %>% 
+  count(word,sentiment, sort = TRUE) %>% 
+  group_by(sentiment) %>% 
+  top_n(5) %>% 
+  ungroup()
+
+got_nrc_gg <- ggplot(data = got_nrc_n5, aes(x = reorder(word,n), y = n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, ncol = 2, scales = "free") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Word", y = "count")
+
+# Show it
+got_nrc_gg
+
+# Save it
+ggsave(plot = got_nrc_gg, 
+       here("figures","ipcc_nrc_sentiment.png"), 
+       height = 8, 
+       width = 5)
+
+```
+
+
+```{r nrc-confidence}
+conf <- get_sentiments(lexicon = "nrc") %>% 
+  filter(word == "confidence")
+
+# Yep, check it out:
+conf
+```
+
