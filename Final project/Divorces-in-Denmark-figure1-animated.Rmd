@@ -1,0 +1,52 @@
+---
+title: "Divorces-in-Denmark-figure1-animated"
+author: "Ina Thomsen, Marie Jensen, Mark Pagh"
+date: "2026-05-20"
+output:
+  html: default
+  html_file: default
+---
+```{r libraries} 
+#MLJ
+
+# install.packages("gganimate")
+# install.packages("gifski")
+# install.packages("av")
+# install.packages("gapminder")
+library(tidyverse)
+library(gganimate)
+library(gifski)
+library(av)
+library(gapminder)
+
+
+skilsmisser3 <- read_csv2("data/skilsmisser.csv")
+
+
+```
+
+
+```{r animation} 
+#MP
+
+skilsmisser3$Year <- as.numeric(as.character(skilsmisser3$Year))
+skilsmisser3$Divorces <- as.numeric(as.character(skilsmisser3$Divorces))
+
+
+animation <- ggplot(skilsmisser3, aes(Year, Divorces)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(n.breaks = 15) +
+  scale_y_continuous(n.breaks = 15) +
+  labs(
+    title = "Development in divorces 1869-2025",
+    x = "Year",
+    y = "Divorces"
+  ) +
+  transition_reveal(Year)
+
+animate(animation)
+
+anim_save("animation.gif", animation = anim)
+
+```
